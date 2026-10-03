@@ -1,0 +1,11 @@
+{
+  "name": "zap-history-fetcher",
+  "version": "1.0.0",
+  "description": "CLI to export public Nostr zap receipts (kind 9735) to CSV",
+  "main": "index.js",
+  "bin": { "zap-history-fetcher": "index.js" },
+  "scripts": { "test": "node test.js" },
+  "keywords": ["nostr", "zaps", "lightning", "csv", "nip57"],
+  "license": "MIT",
+  "engines": { "node": ">=18" }
+}
