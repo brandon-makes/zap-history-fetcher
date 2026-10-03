@@ -25,7 +25,7 @@ function convertBits(data, from, to, pad) {
 }
 function npubToHex(npub) {
   if (/^[0-9a-f]{64}$/i.test(npub)) return npub.toLowerCase();
-  const { hrp, data } = bech32Decode(npub);
+  const { hrp, data } = bech32Decode(npub.toLowerCase());
   if (hrp !== 'npub') throw new Error('not an npub');
   return Buffer.from(convertBits(data, 5, 8, false)).toString('hex');
 }
@@ -89,8 +89,10 @@ function tagValue(ev, name) {
 function amountFromBolt11(bolt11) {
   const m = bolt11.match(/lnbc(\d+)([munp]?)/i);
   if (!m) return null;
-  const mult = { '': 100000000000, m: 100000000, u: 100000, n: 100, p: 1 }[m[2]];
-  return Math.round(parseInt(m[1], 10) * mult); // msats
+  const mult = { '': 100000000000, m: 100000000, u: 100000, n: 100, p: 1 }[m[2]]; // BOLT11: no multiplier = whole BTC
+  const msats = BigInt(m[1]) * BigInt(mult);
+  if (msats > BigInt(Number.MAX_SAFE_INTEGER)) return null; // absurd amount, skip
+  return Number(msats);
 }
 function receiptToRow(ev) {
   let desc = {};
@@ -110,8 +112,8 @@ function receiptToRow(ev) {
   };
 }
 function csvCell(v) {
-  const s = String(v ?? '');
-  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  const s = String(v ?? '').replace(/\r/g, ' ').replace(/\n/g, ' ');
+  return /[",]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 function toCsv(rows) {
   const cols = ['id','date','created_at','sender_pubkey','recipient_pubkey','event_id','amount_sats','amount_msats','content'];
@@ -122,11 +124,15 @@ async function main() {
   const target = args[0];
   if (!target) { console.error('usage: node index.js <npub-or-hex> [--relay wss://...] [--limit N] [--out file.csv]'); process.exit(1); }
   const opt = (n, d) => { const i = args.indexOf('--' + n); return i >= 0 ? args[i + 1] : d; };
-  const relay = opt('relay', 'wss://relay.nostr.band');
+  const relay = opt('relay', 'wss://relay.nostr.band,wss://nos.lol,wss://relay.damus.io');
   const limit = parseInt(opt('limit', '500'), 10);
   const out = opt('out', 'zap-history.csv');
   const hex = npubToHex(target);
-  const events = await wsQuery(relay, { kinds: [9735], '#p': [hex], limit });
+  let events = [];
+  for (const r of relay.split(',').map(s => s.trim()).filter(Boolean)) {
+    try { events = await wsQuery(r, { kinds: [9735], '#p': [hex], limit }); if (events.length) break; }
+    catch { console.error(`relay ${r} failed, trying next`); }
+  }
   const rows = events.map(receiptToRow).sort((a, b) => a.created_at - b.created_at);
   fs.writeFileSync(out, toCsv(rows));
   console.log(`wrote ${rows.length} zap receipts to ${out}`);
