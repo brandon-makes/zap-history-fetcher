@@ -1,0 +1,2 @@
+id,date,created_at,sender_pubkey,recipient_pubkey,event_id,amount_sats,amount_msats,content
+aaaaaaa...aaa,2023-10-01T00:00:00.000Z,1696118400,eeeeeee...eee,ccccccc...ccc,ddddddd...ddd,21,21000,Great post!
